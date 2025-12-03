@@ -47,9 +47,9 @@ on:
       TEST_USERNAME:
         required: true
         description: 'Login username'
-      SMTP_FROM:
+      TEST_PASSWORD:
         required: true
-        TEST_PASSWORD: 'Login password'                
+        description: 'Login password'
 
 env:
   CI: true
