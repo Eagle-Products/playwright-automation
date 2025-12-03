@@ -1,20 +1,43 @@
+# This is a TEMPLATE for the reusable workflow
+# Place this file at: Eagle-Products/playwright-automation/.github/workflows/playwright-test.yml
+# IMPORTANT: This file must have 'workflow_call' trigger to be reusable
+
 name: Playwright Tests
 
 on:
   workflow_call:
+    inputs:
+      app_url:
+        required: true
+        type: string
+        description: 'Application base URL (e.g., https://ensembledev.eagleconsulting.co.in)'
+      username:
+        required: true
+        type: string
+        description: 'Login username'
+      password:
+        required: true
+        type: string
+        description: 'Login password'
     secrets:
       NODE_AUTH_TOKEN:
         required: true
+        description: 'NPM authentication token for GitHub Packages'
       SMTP_SERVER:
         required: true
+        description: 'SMTP server address'
       SMTP_PORT:
         required: true
+        description: 'SMTP server port'
       SMTP_USERNAME:
         required: true
+        description: 'SMTP username'
       SMTP_PASSWORD:
         required: true
+        description: 'SMTP password'
       SMTP_FROM:
         required: true
+        description: 'Email sender address'
 
 env:
   CI: true
@@ -29,8 +52,9 @@ jobs:
         node-version: [22.x]
 
     steps:
-      - name: Checkout code
+      - name: Checkout calling repository
         uses: actions/checkout@v4
+        # This automatically checks out the repository that called this workflow
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -68,6 +92,9 @@ jobs:
         run: yarn test:e2e --reporter=html,github
         env:
           CI: true
+          APP_URL: ${{ inputs.app_url }}
+          TEST_USERNAME: ${{ inputs.username }}
+          TEST_PASSWORD: ${{ inputs.password }}
         continue-on-error: true
 
       - name: Get test results summary
@@ -142,27 +169,27 @@ jobs:
           echo "Final attachments: $ATTACHMENTS"
           echo "attachments=$ATTACHMENTS" >> $GITHUB_ENV
 
-      - name: Send test results email
-        if: always()
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
-          to: vrajenthiran@eagleconsulting.co.in; sanjay@eagleconsulting.co.in
-          from: ${{ secrets.SMTP_FROM }}
-          body: |
-            <h2>Playwright Test Results</h2>
-            <p><strong>Repository:</strong> ${{ github.repository }}</p>
-            <p><strong>Branch:</strong> ${{ github.ref_name }}</p>
-            <p><strong>Commit:</strong> ${{ github.sha }}</p>
-            <p><strong>Run Number:</strong> #${{ github.run_number }}</p>
-            <p><strong>Workflow:</strong> ${{ github.workflow }}</p>
-            <p><strong>Status:</strong> ${{ steps.test-run.outcome == 'success' && '✅ Passed' || '❌ Failed' }}</p>
-            <p><strong>View Results:</strong> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View on GitHub</a></p>
-            <hr>
-            ${{ steps.test-run.outcome == 'failure' && '<p><strong>Note:</strong> Test videos and traces are attached for debugging failed tests.</p>' || '<p>Please find the test report attached.</p>' }}
-          attachments: ${{ env.attachments }}
-          content_type: text/html
+      # - name: Send test results email
+      #   if: always()
+      #   uses: dawidd6/action-send-mail@v3
+      #   with:
+      #     server_address: ${{ secrets.SMTP_SERVER }}
+      #     server_port: ${{ secrets.SMTP_PORT }}
+      #     username: ${{ secrets.SMTP_USERNAME }}
+      #     password: ${{ secrets.SMTP_PASSWORD }}
+      #     subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
+      #     to: vrajenthiran@eagleconsulting.co.in; sanjay@eagleconsulting.co.in
+      #     from: ${{ secrets.SMTP_FROM }}
+      #     body: |
+      #       <h2>Playwright Test Results</h2>
+      #       <p><strong>Repository:</strong> ${{ github.repository }}</p>
+      #       <p><strong>Branch:</strong> ${{ github.ref_name }}</p>
+      #       <p><strong>Commit:</strong> ${{ github.sha }}</p>
+      #       <p><strong>Run Number:</strong> #${{ github.run_number }}</p>
+      #       <p><strong>Workflow:</strong> ${{ github.workflow }}</p>
+      #       <p><strong>Status:</strong> ${{ steps.test-run.outcome == 'success' && '✅ Passed' || '❌ Failed' }}</p>
+      #       <p><strong>View Results:</strong> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View on GitHub</a></p>
+      #       <hr>
+      #       ${{ steps.test-run.outcome == 'failure' && '<p><strong>Note:</strong> Test videos and traces are attached for debugging failed tests.</p>' || '<p>Please find the test report attached.</p>' }}
+      #     attachments: ${{ env.attachments }}
+      #     content_type: text/html
