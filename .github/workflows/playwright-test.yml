@@ -1,0 +1,168 @@
+name: Playwright Tests
+
+on:
+  workflow_call:
+    secrets:
+      NODE_AUTH_TOKEN:
+        required: true
+      SMTP_SERVER:
+        required: true
+      SMTP_PORT:
+        required: true
+      SMTP_USERNAME:
+        required: true
+      SMTP_PASSWORD:
+        required: true
+      SMTP_FROM:
+        required: true
+
+env:
+  CI: true
+
+jobs:
+  test:
+    timeout-minutes: 60
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        node-version: [22.x]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          distribution: 'adopt'
+          cache: 'yarn'
+
+      - name: Create NPMRC
+        run: |
+          echo "@eagle-products:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "@eagle-projects:registry=https://npm.pkg.github.com" >> ~/.npmrc
+          echo "always-auth=true" >> ~/.npmrc
+          echo "//npm.pkg.github.com/:_authToken=${{ secrets.NODE_AUTH_TOKEN }}" >> ~/.npmrc
+          echo 'registry "https://registry.yarnpkg.com"' >> ~/.yarnrc
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ hashFiles('**/package-lock.json', '**/yarn.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-playwright-
+
+      - name: Install Playwright Browsers
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        id: test-run
+        run: yarn test:e2e --reporter=html,github
+        env:
+          CI: true
+        continue-on-error: true
+
+      - name: Get test results summary
+        id: test-summary
+        if: always()
+        run: |
+          echo "Checking for test results..."
+          ls -la || true
+          echo "---"
+          if [ -d "playwright-report" ]; then
+            echo "playwright-report directory exists"
+            ls -la playwright-report/ || true
+            if [ -f "playwright-report/index.html" ]; then
+              echo "has_report=true" >> $GITHUB_OUTPUT
+              echo "Report found: playwright-report/index.html"
+            else
+              echo "has_report=false" >> $GITHUB_OUTPUT
+              echo "Report index.html not found"
+            fi
+          else
+            echo "has_report=false" >> $GITHUB_OUTPUT
+            echo "playwright-report directory does not exist"
+          fi
+
+          echo "---"
+          if [ -d "test-results" ] && [ "$(ls -A test-results 2>/dev/null)" ]; then
+            echo "has_videos=true" >> $GITHUB_OUTPUT
+            echo "Test results directory exists with content"
+          else
+            echo "has_videos=false" >> $GITHUB_OUTPUT
+            echo "Test results directory empty or missing"
+          fi
+
+      - name: Create test results archive
+        if: always()
+        run: |
+          if [ -d "playwright-report" ] && [ -f "playwright-report/index.html" ]; then
+            echo "Creating archive from playwright-report..."
+            cd playwright-report
+            zip -r ../playwright-report.zip .
+            cd ..
+            echo "Archive created: playwright-report.zip"
+          else
+            echo "No HTML report found, creating summary report..."
+            echo "<html><body><h1>Playwright Test Summary</h1><p>Test Status: ${{ steps.test-run.outcome }}</p><p>HTML report not available. Check GitHub Actions logs for details.</p></body></html>" > summary.html
+            zip playwright-report.zip summary.html || true
+          fi
+
+      - name: Create videos archive
+        if: always() && steps.test-summary.outputs.has_videos == 'true'
+        run: |
+          zip -r test-results.zip test-results/ || true
+
+      - name: Prepare email attachments
+        if: always()
+        run: |
+          ATTACHMENTS=""
+          if [ -f "playwright-report.zip" ]; then
+            ATTACHMENTS="playwright-report.zip"
+            echo "Found playwright-report.zip"
+          else
+            echo "playwright-report.zip not found"
+          fi
+          if [ -f "test-results.zip" ] && [ "${{ steps.test-run.outcome }}" == "failure" ]; then
+            if [ -n "$ATTACHMENTS" ]; then
+              ATTACHMENTS="$ATTACHMENTS,test-results.zip"
+            else
+              ATTACHMENTS="test-results.zip"
+            fi
+            echo "Added test-results.zip to attachments"
+          fi
+          echo "Final attachments: $ATTACHMENTS"
+          echo "attachments=$ATTACHMENTS" >> $GITHUB_ENV
+
+      - name: Send test results email
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
+          to: vrajenthiran@eagleconsulting.co.in; sanjay@eagleconsulting.co.in
+          from: ${{ secrets.SMTP_FROM }}
+          body: |
+            <h2>Playwright Test Results</h2>
+            <p><strong>Repository:</strong> ${{ github.repository }}</p>
+            <p><strong>Branch:</strong> ${{ github.ref_name }}</p>
+            <p><strong>Commit:</strong> ${{ github.sha }}</p>
+            <p><strong>Run Number:</strong> #${{ github.run_number }}</p>
+            <p><strong>Workflow:</strong> ${{ github.workflow }}</p>
+            <p><strong>Status:</strong> ${{ steps.test-run.outcome == 'success' && '✅ Passed' || '❌ Failed' }}</p>
+            <p><strong>View Results:</strong> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View on GitHub</a></p>
+            <hr>
+            ${{ steps.test-run.outcome == 'failure' && '<p><strong>Note:</strong> Test videos and traces are attached for debugging failed tests.</p>' || '<p>Please find the test report attached.</p>' }}
+          attachments: ${{ env.attachments }}
+          content_type: text/html
