@@ -8,17 +8,20 @@ on:
   workflow_call:
     inputs:
       app_url:
-        required: true
+        required: false
         type: string
         description: 'Application base URL (e.g., https://ensembledev.eagleconsulting.co.in)'
+        default: 'https://ensembledev.eagleconsulting.co.in'
       username:
-        required: true
+        required: false
         type: string
         description: 'Login username'
+        default: 'superuser'
       password:
-        required: true
+        required: false
         type: string
         description: 'Login password'
+        default: 'Eagle@2025'
     secrets:
       NODE_AUTH_TOKEN:
         required: true
@@ -92,9 +95,9 @@ jobs:
         run: yarn test:e2e --reporter=html,github
         env:
           CI: true
-          APP_URL: ${{ inputs.app_url }}
-          TEST_USERNAME: ${{ inputs.username }}
-          TEST_PASSWORD: ${{ inputs.password }}
+          APP_URL: ${{ inputs.app_url || 'https://ensembledev.eagleconsulting.co.in' }}
+          TEST_USERNAME: ${{ inputs.username || 'superuser' }}
+          TEST_PASSWORD: ${{ inputs.password || 'Eagle@2025' }}
         continue-on-error: true
 
       - name: Get test results summary
@@ -169,27 +172,27 @@ jobs:
           echo "Final attachments: $ATTACHMENTS"
           echo "attachments=$ATTACHMENTS" >> $GITHUB_ENV
 
-      # - name: Send test results email
-      #   if: always()
-      #   uses: dawidd6/action-send-mail@v3
-      #   with:
-      #     server_address: ${{ secrets.SMTP_SERVER }}
-      #     server_port: ${{ secrets.SMTP_PORT }}
-      #     username: ${{ secrets.SMTP_USERNAME }}
-      #     password: ${{ secrets.SMTP_PASSWORD }}
-      #     subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
-      #     to: vrajenthiran@eagleconsulting.co.in; sanjay@eagleconsulting.co.in
-      #     from: ${{ secrets.SMTP_FROM }}
-      #     body: |
-      #       <h2>Playwright Test Results</h2>
-      #       <p><strong>Repository:</strong> ${{ github.repository }}</p>
-      #       <p><strong>Branch:</strong> ${{ github.ref_name }}</p>
-      #       <p><strong>Commit:</strong> ${{ github.sha }}</p>
-      #       <p><strong>Run Number:</strong> #${{ github.run_number }}</p>
-      #       <p><strong>Workflow:</strong> ${{ github.workflow }}</p>
-      #       <p><strong>Status:</strong> ${{ steps.test-run.outcome == 'success' && '✅ Passed' || '❌ Failed' }}</p>
-      #       <p><strong>View Results:</strong> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View on GitHub</a></p>
-      #       <hr>
-      #       ${{ steps.test-run.outcome == 'failure' && '<p><strong>Note:</strong> Test videos and traces are attached for debugging failed tests.</p>' || '<p>Please find the test report attached.</p>' }}
-      #     attachments: ${{ env.attachments }}
-      #     content_type: text/html
+      - name: Send test results email
+        if: always()
+        uses: dawidd6/action-send-mail@v3
+        with:
+          server_address: ${{ secrets.SMTP_SERVER }}
+          server_port: ${{ secrets.SMTP_PORT }}
+          username: ${{ secrets.SMTP_USERNAME }}
+          password: ${{ secrets.SMTP_PASSWORD }}
+          subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
+          to: vrajenthiran@eagleconsulting.co.in; sanjay@eagleconsulting.co.in
+          from: ${{ secrets.SMTP_FROM }}
+          body: |
+            <h2>Playwright Test Results</h2>
+            <p><strong>Repository:</strong> ${{ github.repository }}</p>
+            <p><strong>Branch:</strong> ${{ github.ref_name }}</p>
+            <p><strong>Commit:</strong> ${{ github.sha }}</p>
+            <p><strong>Run Number:</strong> #${{ github.run_number }}</p>
+            <p><strong>Workflow:</strong> ${{ github.workflow }}</p>
+            <p><strong>Status:</strong> ${{ steps.test-run.outcome == 'success' && '✅ Passed' || '❌ Failed' }}</p>
+            <p><strong>View Results:</strong> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View on GitHub</a></p>
+            <hr>
+            ${{ steps.test-run.outcome == 'failure' && '<p><strong>Note:</strong> Test videos and traces are attached for debugging failed tests.</p>' || '<p>Please find the test report attached.</p>' }}
+          attachments: ${{ env.attachments }}
+          content_type: text/html
