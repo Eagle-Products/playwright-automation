@@ -42,13 +42,13 @@ on:
         required: true
         description: 'Email sender address'
       TEST_APP_URL:
-        required: true
+        required: false
         description: 'Application base URL (e.g., https://ensembledev.eagleconsulting.co.in)'
       TEST_USERNAME:
-        required: true
+        required: false
         description: 'Login username'
       TEST_PASSWORD:
-        required: true
+        required: false
         description: 'Login password'
 
 env:
