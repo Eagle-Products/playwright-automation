@@ -114,21 +114,24 @@ jobs:
           fi
 
           cat > email-body.txt << EOF
-Playwright Test Results
-======================
+          Playwright Test Results
+          =======================
 
-Repository: ${{ github.repository }}
-Branch: ${{ github.ref_name }}
-Commit: ${{ github.sha }}
-Run Number: #${{ github.run_number }}
-Workflow: ${{ github.workflow }}
-Status: ${STATUS_TEXT}
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref_name }}
+          Commit: ${{ github.sha }}
+          Run Number: #${{ github.run_number }}
+          Workflow: ${{ github.workflow }}
+          Status: ${STATUS_TEXT}
 
-You can download the test report from the GitHub Actions run artifacts link below:
-${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          Download Report:
+          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-${NOTE_TEXT}
-EOF
+          ${NOTE_TEXT}
+          EOF
+
+          echo "Email body created:"
+          cat email-body.txt
 
       - name: Send test results email
         if: always()
