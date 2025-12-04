@@ -155,31 +155,39 @@ jobs:
             zip playwright-report.zip summary.html || true
           fi
 
-      - name: Create videos archive
-        if: always() && steps.test-summary.outputs.has_videos == 'true'
-        run: |
-          zip -r test-results.zip test-results/ || true
-
       - name: Prepare email attachments
         if: always()
         run: |
+          # Google Mail has a 25MB limit for total message size
+          MAX_SIZE_MB=20
+          MAX_SIZE_BYTES=$((MAX_SIZE_MB * 1024 * 1024))
           ATTACHMENTS=""
-          if [ -f "playwright-report.zip" ]; then
-            ATTACHMENTS="playwright-report.zip"
-            echo "Found playwright-report.zip"
-          else
-            echo "playwright-report.zip not found"
-          fi
-          if [ -f "test-results.zip" ] && [ "${{ steps.test-run.outcome }}" == "failure" ]; then
-            if [ -n "$ATTACHMENTS" ]; then
-              ATTACHMENTS="$ATTACHMENTS,test-results.zip"
+          ATTACHMENT_NOTES=""
+
+          # Function to get file size in bytes
+          get_file_size() {
+            if [ -f "$1" ]; then
+              stat -f%z "$1" 2>/dev/null || stat -c%s "$1" 2>/dev/null || echo "0"
             else
-              ATTACHMENTS="test-results.zip"
+              echo "0"
             fi
-            echo "Added test-results.zip to attachments"
+          }
+
+          # Check playwright-report.zip
+          if [ -f "playwright-report.zip" ]; then
+            REPORT_SIZE=$(get_file_size "playwright-report.zip")
+            if [ "$REPORT_SIZE" -lt "$MAX_SIZE_BYTES" ]; then
+              ATTACHMENTS="playwright-report.zip"
+              echo "Added playwright-report.zip ($(numfmt --to=iec-i --suffix=B $REPORT_SIZE 2>/dev/null || echo "${REPORT_SIZE} bytes"))"
+            else
+              ATTACHMENT_NOTES="${ATTACHMENT_NOTES}<p><strong>Note:</strong> Test report (playwright-report.zip) is too large ($(numfmt --to=iec-i --suffix=B $REPORT_SIZE 2>/dev/null || echo "${REPORT_SIZE} bytes")) to attach. Please download it from GitHub Actions artifacts.</p>"
+              echo "Skipped playwright-report.zip - too large ($(numfmt --to=iec-i --suffix=B $REPORT_SIZE 2>/dev/null || echo "${REPORT_SIZE} bytes"))"
+            fi
           fi
+
           echo "Final attachments: $ATTACHMENTS"
           echo "attachments=$ATTACHMENTS" >> $GITHUB_ENV
+          echo "attachment_notes=$ATTACHMENT_NOTES" >> $GITHUB_ENV
 
       - name: Prepare email body
         if: always()
@@ -192,10 +200,17 @@ jobs:
           if [ "${{ steps.test-run.outcome }}" == "failure" ]; then
             STATUS_EMOJI="❌"
             STATUS_TEXT="Failed"
-            NOTE_TEXT="<p><strong>Note:</strong> Test videos and traces are attached for debugging failed tests.</p>"
+            NOTE_TEXT="<p><strong>Note:</strong> Test failed. Please check the test report and GitHub Actions logs for details.</p>"
           fi
 
-          cat > email-body.html << EOF
+          # Add attachment size notes if any files were skipped
+          ATTACHMENT_NOTES="${{ env.attachment_notes }}"
+          if [ -n "$ATTACHMENT_NOTES" ]; then
+            NOTE_TEXT="${NOTE_TEXT}${ATTACHMENT_NOTES}"
+          fi
+
+          # Create HTML body file
+          cat > email-body.html << 'EMAILBODY'
           <!DOCTYPE html>
           <html>
           <head>
@@ -210,28 +225,47 @@ jobs:
               .link { color: #3498db; text-decoration: none; }
               .link:hover { text-decoration: underline; }
               hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+              .note { background-color: #f8f9fa; padding: 10px; border-left: 4px solid #3498db; margin: 10px 0; }
             </style>
           </head>
           <body>
             <div class="container">
               <h2>Playwright Test Results</h2>
-              <div class="info-row"><span class="label">Repository:</span> ${{ github.repository }}</div>
-              <div class="info-row"><span class="label">Branch:</span> ${{ github.ref_name }}</div>
-              <div class="info-row"><span class="label">Commit:</span> ${{ github.sha }}</div>
-              <div class="info-row"><span class="label">Run Number:</span> #${{ github.run_number }}</div>
-              <div class="info-row"><span class="label">Workflow:</span> ${{ github.workflow }}</div>
-              <div class="info-row"><span class="label">Status:</span> <span class="status">${STATUS_EMOJI} ${STATUS_TEXT}</span></div>
+              <div class="info-row"><span class="label">Repository:</span> REPO_PLACEHOLDER</div>
+              <div class="info-row"><span class="label">Branch:</span> BRANCH_PLACEHOLDER</div>
+              <div class="info-row"><span class="label">Commit:</span> COMMIT_PLACEHOLDER</div>
+              <div class="info-row"><span class="label">Run Number:</span> RUN_NUMBER_PLACEHOLDER</div>
+              <div class="info-row"><span class="label">Workflow:</span> WORKFLOW_PLACEHOLDER</div>
+              <div class="info-row"><span class="label">Status:</span> <span class="status">STATUS_PLACEHOLDER</span></div>
               <div class="info-row">
                 <span class="label">View Results:</span> 
-                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" class="link">View on GitHub</a>
+                <a href="LINK_PLACEHOLDER" class="link">View on GitHub</a>
               </div>
               <hr>
-              ${NOTE_TEXT}
+              <div class="note">
+                NOTE_PLACEHOLDER
+              </div>
             </div>
           </body>
           </html>
-          EOF
-          echo "body_path=email-body.html" >> $GITHUB_OUTPUT
+          EMAILBODY
+
+          # Replace placeholders with actual values
+          sed -i.bak "s|REPO_PLACEHOLDER|${{ github.repository }}|g" email-body.html
+          sed -i.bak "s|BRANCH_PLACEHOLDER|${{ github.ref_name }}|g" email-body.html
+          sed -i.bak "s|COMMIT_PLACEHOLDER|${{ github.sha }}|g" email-body.html
+          sed -i.bak "s|RUN_NUMBER_PLACEHOLDER|#${{ github.run_number }}|g" email-body.html
+          sed -i.bak "s|WORKFLOW_PLACEHOLDER|${{ github.workflow }}|g" email-body.html
+          sed -i.bak "s|STATUS_PLACEHOLDER|${STATUS_EMOJI} ${STATUS_TEXT}|g" email-body.html
+          sed -i.bak "s|LINK_PLACEHOLDER|${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|g" email-body.html
+          sed -i.bak "s|NOTE_PLACEHOLDER|${NOTE_TEXT}|g" email-body.html
+          rm -f email-body.html.bak
+
+          # Verify file was created and has content
+          echo "Email body file created:"
+          ls -lh email-body.html
+          echo "First 10 lines:"
+          head -10 email-body.html
 
       - name: Send test results email
         if: always()
@@ -242,8 +276,8 @@ jobs:
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
           subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
-          to: vrajenthiran@eagleconsulting.co.in
+          to: vrajenthiran@eagleconsulting.co.in; sanjay@eagleconsulting.co.in
           from: ${{ secrets.SMTP_FROM }}
-          body_path: ${{ steps.email-body.outputs.body_path }}
+          body_path: email-body.html
           attachments: ${{ env.attachments }}
           content_type: text/html
