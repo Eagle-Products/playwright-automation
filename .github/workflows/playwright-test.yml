@@ -190,7 +190,7 @@ jobs:
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
           subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
-          to: vrajenthiran@eagleconsulting.co.in; sanjay@eagleconsulting.co.in
+          to: vrajenthiran@eagleconsulting.co.in; vigneshcse2k2k@gmail.com
           from: ${{ secrets.SMTP_FROM }}
           body: |
             <h2>Playwright Test Results</h2>
