@@ -181,6 +181,58 @@ jobs:
           echo "Final attachments: $ATTACHMENTS"
           echo "attachments=$ATTACHMENTS" >> $GITHUB_ENV
 
+      - name: Prepare email body
+        if: always()
+        id: email-body
+        run: |
+          STATUS_EMOJI="✅"
+          STATUS_TEXT="Passed"
+          NOTE_TEXT="Please find the test report attached."
+
+          if [ "${{ steps.test-run.outcome }}" == "failure" ]; then
+            STATUS_EMOJI="❌"
+            STATUS_TEXT="Failed"
+            NOTE_TEXT="<p><strong>Note:</strong> Test videos and traces are attached for debugging failed tests.</p>"
+          fi
+
+          cat > email-body.html << EOF
+          <!DOCTYPE html>
+          <html>
+          <head>
+            <meta charset="UTF-8">
+            <style>
+              body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+              .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+              h2 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+              .info-row { margin: 10px 0; }
+              .label { font-weight: bold; color: #555; }
+              .status { font-size: 18px; font-weight: bold; }
+              .link { color: #3498db; text-decoration: none; }
+              .link:hover { text-decoration: underline; }
+              hr { border: none; border-top: 1px solid #ddd; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h2>Playwright Test Results</h2>
+              <div class="info-row"><span class="label">Repository:</span> ${{ github.repository }}</div>
+              <div class="info-row"><span class="label">Branch:</span> ${{ github.ref_name }}</div>
+              <div class="info-row"><span class="label">Commit:</span> ${{ github.sha }}</div>
+              <div class="info-row"><span class="label">Run Number:</span> #${{ github.run_number }}</div>
+              <div class="info-row"><span class="label">Workflow:</span> ${{ github.workflow }}</div>
+              <div class="info-row"><span class="label">Status:</span> <span class="status">${STATUS_EMOJI} ${STATUS_TEXT}</span></div>
+              <div class="info-row">
+                <span class="label">View Results:</span> 
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" class="link">View on GitHub</a>
+              </div>
+              <hr>
+              ${NOTE_TEXT}
+            </div>
+          </body>
+          </html>
+          EOF
+          echo "body_path=email-body.html" >> $GITHUB_OUTPUT
+
       - name: Send test results email
         if: always()
         uses: dawidd6/action-send-mail@v3
@@ -190,18 +242,8 @@ jobs:
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
           subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
-          to: vrajenthiran@eagleconsulting.co.in; vigneshcse2k2k@gmail.com
+          to: vrajenthiran@eagleconsulting.co.in
           from: ${{ secrets.SMTP_FROM }}
-          body: |
-            <h2>Playwright Test Results</h2>
-            <p><strong>Repository:</strong> ${{ github.repository }}</p>
-            <p><strong>Branch:</strong> ${{ github.ref_name }}</p>
-            <p><strong>Commit:</strong> ${{ github.sha }}</p>
-            <p><strong>Run Number:</strong> #${{ github.run_number }}</p>
-            <p><strong>Workflow:</strong> ${{ github.workflow }}</p>
-            <p><strong>Status:</strong> ${{ steps.test-run.outcome == 'success' && '✅ Passed' || '❌ Failed' }}</p>
-            <p><strong>View Results:</strong> <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View on GitHub</a></p>
-            <hr>
-            ${{ steps.test-run.outcome == 'failure' && '<p><strong>Note:</strong> Test videos and traces are attached for debugging failed tests.</p>' || '<p>Please find the test report attached.</p>' }}
+          body_path: ${{ steps.email-body.outputs.body_path }}
           attachments: ${{ env.attachments }}
           content_type: text/html
