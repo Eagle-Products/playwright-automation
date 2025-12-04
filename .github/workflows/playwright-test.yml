@@ -1,7 +1,3 @@
-# This is a TEMPLATE for the reusable workflow
-# Place this file at: Eagle-Products/playwright-automation/.github/workflows/playwright-test.yml
-# IMPORTANT: This file must have 'workflow_call' trigger to be reusable
-
 name: Playwright Tests
 
 on:
@@ -10,46 +6,28 @@ on:
       app_url:
         required: false
         type: string
-        description: 'Application base URL (e.g., https://ensembledev.eagleconsulting.co.in)'
         default: 'https://ensembledev.eagleconsulting.co.in'
       username:
         required: false
         type: string
-        description: 'Login username'
         default: 'superuser'
       password:
         required: false
         type: string
-        description: 'Login password'
         default: 'Eagle@2025'
     secrets:
       NODE_AUTH_TOKEN:
         required: true
-        description: 'NPM authentication token for GitHub Packages'
       SMTP_SERVER:
         required: true
-        description: 'SMTP server address'
       SMTP_PORT:
         required: true
-        description: 'SMTP server port'
       SMTP_USERNAME:
         required: true
-        description: 'SMTP username'
       SMTP_PASSWORD:
         required: true
-        description: 'SMTP password'
       SMTP_FROM:
         required: true
-        description: 'Email sender address'
-      TEST_APP_URL:
-        required: false
-        description: 'Application base URL (e.g., https://ensembledev.eagleconsulting.co.in)'
-      TEST_USERNAME:
-        required: false
-        description: 'Login username'
-      TEST_PASSWORD:
-        required: false
-        description: 'Login password'
 
 env:
   CI: true
@@ -66,7 +44,6 @@ jobs:
     steps:
       - name: Checkout calling repository
         uses: actions/checkout@v4
-        # This automatically checks out the repository that called this workflow
 
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
@@ -82,8 +59,6 @@ jobs:
           echo "always-auth=true" >> ~/.npmrc
           echo "//npm.pkg.github.com/:_authToken=${{ secrets.NODE_AUTH_TOKEN }}" >> ~/.npmrc
           echo 'registry "https://registry.yarnpkg.com"' >> ~/.yarnrc
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NODE_AUTH_TOKEN }}
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
@@ -104,146 +79,40 @@ jobs:
         run: yarn test:e2e --reporter=html,github
         env:
           CI: true
-          APP_URL: ${{ inputs.app_url || 'https://ensembledev.eagleconsulting.co.in' }}
-          TEST_USERNAME: ${{ inputs.username || 'superuser' }}
-          TEST_PASSWORD: ${{ inputs.password || 'Eagle@2025' }}
+          APP_URL: ${{ inputs.app_url }}
+          TEST_USERNAME: ${{ inputs.username }}
+          TEST_PASSWORD: ${{ inputs.password }}
         continue-on-error: true
 
-      - name: Get test results summary
-        id: test-summary
+      - name: Archive test results
         if: always()
         run: |
-          echo "Checking for test results..."
-          ls -la || true
-          echo "---"
           if [ -d "playwright-report" ]; then
-            echo "playwright-report directory exists"
-            ls -la playwright-report/ || true
-            if [ -f "playwright-report/index.html" ]; then
-              echo "has_report=true" >> $GITHUB_OUTPUT
-              echo "Report found: playwright-report/index.html"
-            else
-              echo "has_report=false" >> $GITHUB_OUTPUT
-              echo "Report index.html not found"
-            fi
+            echo "Report directory exists."
           else
-            echo "has_report=false" >> $GITHUB_OUTPUT
-            echo "playwright-report directory does not exist"
+            echo "<html><body><h1>No HTML report was generated</h1></body></html>" > playwright-report/index.html
           fi
 
-          echo "---"
-          if [ -d "test-results" ] && [ "$(ls -A test-results 2>/dev/null)" ]; then
-            echo "has_videos=true" >> $GITHUB_OUTPUT
-            echo "Test results directory exists with content"
-          else
-            echo "has_videos=false" >> $GITHUB_OUTPUT
-            echo "Test results directory empty or missing"
-          fi
-
-      - name: Create test results archive
+      - name: Upload Playwright Report as Artifact
         if: always()
-        run: |
-          if [ -d "playwright-report" ] && [ -f "playwright-report/index.html" ]; then
-            echo "Creating archive from playwright-report..."
-            cd playwright-report
-            zip -r ../playwright-report.zip .
-            cd ..
-            echo "Archive created: playwright-report.zip"
-          else
-            echo "No HTML report found, creating summary report..."
-            echo "<html><body><h1>Playwright Test Summary</h1><p>Test Status: ${{ steps.test-run.outcome }}</p><p>HTML report not available. Check GitHub Actions logs for details.</p></body></html>" > summary.html
-            zip playwright-report.zip summary.html || true
-          fi
-
-      - name: Prepare email attachments
-        if: always()
-        run: |
-          # Google Mail has a 25MB limit for total message size
-          MAX_SIZE_MB=20
-          MAX_SIZE_BYTES=$((MAX_SIZE_MB * 1024 * 1024))
-          ATTACHMENTS=""
-          ATTACHMENT_NOTES=""
-
-          # Function to get file size in bytes
-          get_file_size() {
-            if [ -f "$1" ]; then
-              stat -f%z "$1" 2>/dev/null || stat -c%s "$1" 2>/dev/null || echo "0"
-            else
-              echo "0"
-            fi
-          }
-
-          # Check playwright-report.zip
-          if [ -f "playwright-report.zip" ]; then
-            REPORT_SIZE=$(get_file_size "playwright-report.zip")
-            if [ "$REPORT_SIZE" -lt "$MAX_SIZE_BYTES" ]; then
-              ATTACHMENTS="playwright-report.zip"
-              echo "Added playwright-report.zip ($(numfmt --to=iec-i --suffix=B $REPORT_SIZE 2>/dev/null || echo "${REPORT_SIZE} bytes"))"
-            else
-              ATTACHMENT_NOTES="${ATTACHMENT_NOTES}<p><strong>Note:</strong> Test report (playwright-report.zip) is too large ($(numfmt --to=iec-i --suffix=B $REPORT_SIZE 2>/dev/null || echo "${REPORT_SIZE} bytes")) to attach. Please download it from GitHub Actions artifacts.</p>"
-              echo "Skipped playwright-report.zip - too large ($(numfmt --to=iec-i --suffix=B $REPORT_SIZE 2>/dev/null || echo "${REPORT_SIZE} bytes"))"
-            fi
-          fi
-
-          echo "Final attachments: $ATTACHMENTS"
-          echo "attachments=$ATTACHMENTS" >> $GITHUB_ENV
-          echo "attachment_notes=$ATTACHMENT_NOTES" >> $GITHUB_ENV
-
-      - name: Prepare email attachments
-        if: always()
-        run: |
-          # Google Mail has a 25MB limit for total message size
-          MAX_SIZE_MB=20
-          MAX_SIZE_BYTES=$((MAX_SIZE_MB * 1024 * 1024))
-          ATTACHMENTS=""
-          ATTACHMENT_NOTES=""
-
-          # Function to get file size in bytes
-          get_file_size() {
-            if [ -f "$1" ]; then
-              stat -f%z "$1" 2>/dev/null || stat -c%s "$1" 2>/dev/null || echo "0"
-            else
-              echo "0"
-            fi
-          }
-
-          # Check playwright-report.zip
-          if [ -f "playwright-report.zip" ]; then
-            REPORT_SIZE=$(get_file_size "playwright-report.zip")
-            if [ "$REPORT_SIZE" -lt "$MAX_SIZE_BYTES" ]; then
-              ATTACHMENTS="playwright-report.zip"
-              echo "Added playwright-report.zip ($(numfmt --to=iec-i --suffix=B $REPORT_SIZE 2>/dev/null || echo "${REPORT_SIZE} bytes"))"
-            else
-              ATTACHMENT_NOTES="${ATTACHMENT_NOTES}<p><strong>Note:</strong> Test report (playwright-report.zip) is too large ($(numfmt --to=iec-i --suffix=B $REPORT_SIZE 2>/dev/null || echo "${REPORT_SIZE} bytes")) to attach. Please download it from GitHub Actions artifacts.</p>"
-              echo "Skipped playwright-report.zip - too large ($(numfmt --to=iec-i --suffix=B $REPORT_SIZE 2>/dev/null || echo "${REPORT_SIZE} bytes"))"
-            fi
-          fi
-
-          echo "Final attachments: $ATTACHMENTS"
-          echo "attachments=$ATTACHMENTS" >> $GITHUB_ENV
-          echo "attachment_notes=$ATTACHMENT_NOTES" >> $GITHUB_ENV
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report
+          retention-days: 2
 
       - name: Prepare email body
         if: always()
         id: email-body
         run: |
           STATUS_TEXT="Passed"
-          NOTE_TEXT="Please find the test report attached."
+          NOTE_TEXT="Test report has been uploaded to GitHub Actions artifacts (retained for 2 days)."
 
           if [ "${{ steps.test-run.outcome }}" == "failure" ]; then
             STATUS_TEXT="Failed"
-            NOTE_TEXT="Test failed. Please check the test report and GitHub Actions logs for details."
+            NOTE_TEXT="Test failed. Report uploaded to GitHub Actions artifacts (available for 2 days)."
           fi
 
-          # Add attachment size notes if any files were skipped
-          ATTACHMENT_NOTES="${{ env.attachment_notes }}"
-          if [ -n "$ATTACHMENT_NOTES" ]; then
-            # Remove HTML tags from attachment notes for plain text
-            ATTACHMENT_NOTES_CLEAN=$(echo "$ATTACHMENT_NOTES" | sed 's/<[^>]*>//g')
-            NOTE_TEXT="${NOTE_TEXT}\n\n${ATTACHMENT_NOTES_CLEAN}"
-          fi
-
-          # Create simple plain text email body (more email-client friendly)
           cat > email-body.txt << EOF
           Playwright Test Results
           ======================
@@ -255,16 +124,11 @@ jobs:
           Workflow: ${{ github.workflow }}
           Status: ${STATUS_TEXT}
 
-          View Results: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          You can download the test report from the GitHub Actions run artifacts link below:
+          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
           ${NOTE_TEXT}
           EOF
-
-          # Verify file was created and has content
-          echo "Email body file created:"
-          ls -lh email-body.txt
-          echo "Content:"
-          cat email-body.txt
 
       - name: Send test results email
         if: always()
@@ -278,5 +142,4 @@ jobs:
           to: vrajenthiran@eagleconsulting.co.in
           from: ${{ secrets.SMTP_FROM }}
           body_path: email-body.txt
-          attachments: ${{ env.attachments }}
           content_type: text/plain
