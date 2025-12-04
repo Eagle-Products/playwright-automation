@@ -106,32 +106,37 @@ jobs:
         id: email-body
         run: |
           STATUS_TEXT="Passed"
-          NOTE_TEXT="Test report has been uploaded to GitHub Actions artifacts (retained for 2 days)."
-
           if [ "${{ steps.test-run.outcome }}" == "failure" ]; then
             STATUS_TEXT="Failed"
-            NOTE_TEXT="Test failed. Report uploaded to GitHub Actions artifacts (available for 2 days)."
           fi
 
-          cat > email-body.txt << EOF
-          Playwright Test Results
-          =======================
+          cat > email-body.html << 'EOF'
+          <html>
+            <body style="font-family: Arial, sans-serif; font-size: 14px;">
+              <h2>Playwright Test Results</h2>
+              <p><b>Repository:</b> ${{ github.repository }}</p>
+              <p><b>Branch:</b> ${{ github.ref_name }}</p>
+              <p><b>Commit:</b> ${{ github.sha }}</p>
+              <p><b>Run Number:</b> #${{ github.run_number }}</p>
+              <p><b>Status:</b> STATUS_PLACEHOLDER</p>
 
-          Repository: ${{ github.repository }}
-          Branch: ${{ github.ref_name }}
-          Commit: ${{ github.sha }}
-          Run Number: #${{ github.run_number }}
-          Workflow: ${{ github.workflow }}
-          Status: ${STATUS_TEXT}
+              <p>
+                <b>View Report:</b><br/>
+                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">
+                  Click here to open the GitHub Actions test report
+                </a>
+              </p>
 
-          Download Report:
-          ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-
-          ${NOTE_TEXT}
+              <p>Artifacts retained for 2 days.</p>
+            </body>
+          </html>
           EOF
 
+          # Replace placeholder inside HTML safely
+          sed -i "s/STATUS_PLACEHOLDER/${STATUS_TEXT}/g" email-body.html
+
           echo "Email body created:"
-          cat email-body.txt
+          cat email-body.html
 
       - name: Send test results email
         if: always()
@@ -144,5 +149,5 @@ jobs:
           subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
           to: vrajenthiran@eagleconsulting.co.in
           from: ${{ secrets.SMTP_FROM }}
-          body_path: email-body.txt
-          content_type: text/plain
+          body_path: email-body.html
+          content_type: text/html
