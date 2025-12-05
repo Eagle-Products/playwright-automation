@@ -85,7 +85,7 @@ jobs:
         continue-on-error: true
 
       - name: Archive test results
-        if: always()
+        if: failure()
         run: |
           if [ -d "playwright-report" ]; then
             echo "Report directory exists."
@@ -94,7 +94,7 @@ jobs:
           fi
 
       - name: Upload Playwright Report as Artifact
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
@@ -102,36 +102,35 @@ jobs:
           retention-days: 2
 
       - name: Prepare email body
-        if: always()
+        if: failure()
         id: email-body
         run: |
-          STATUS_TEXT="Passed"
-          if [ "${{ steps.test-run.outcome }}" == "failure" ]; then
-            STATUS_TEXT="Failed"
-          fi
-
           cat > "${{ github.workspace }}/email-body.html" << 'EMAILEOF'
           <html>
           <body style="font-family: Arial, sans-serif; font-size: 14px;">
-          <h2>Playwright Test Results</h2>
+          <h2>Playwright Test Results - Failed</h2>
           <p><b>Repository:</b> REPO_PLACEHOLDER</p>
           <p><b>Branch:</b> BRANCH_PLACEHOLDER</p>
           <p><b>Commit:</b> COMMIT_PLACEHOLDER</p>
           <p><b>Run Number:</b> RUN_NUM_PLACEHOLDER</p>
-          <p><b>Status:</b> STATUS_PLACEHOLDER</p>
-          <p><b>View Report:</b><br/>
+          <p><b>Status:</b> <span style="color: red; font-weight: bold;">Failed</span></p>
+          <p><b>View Run Details:</b><br/>
           <a href="REPORT_URL_PLACEHOLDER">Click here to open the GitHub Actions test report</a></p>
-          <p>Artifacts retained for 2 days.</p>
+          <p><b>Download Test Artifacts:</b><br/>
+          <a href="ARTIFACT_URL_PLACEHOLDER">Click here to download the Playwright test report artifacts</a><br/>
           </body>
           </html>
           EMAILEOF
+
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
           sed -i "s|REPO_PLACEHOLDER|${{ github.repository }}|g" "${{ github.workspace }}/email-body.html"
           sed -i "s|BRANCH_PLACEHOLDER|${{ github.ref_name }}|g" "${{ github.workspace }}/email-body.html"
           sed -i "s|COMMIT_PLACEHOLDER|${{ github.sha }}|g" "${{ github.workspace }}/email-body.html"
           sed -i "s|RUN_NUM_PLACEHOLDER|#${{ github.run_number }}|g" "${{ github.workspace }}/email-body.html"
-          sed -i "s|STATUS_PLACEHOLDER|${STATUS_TEXT}|g" "${{ github.workspace }}/email-body.html"
-          sed -i "s|REPORT_URL_PLACEHOLDER|${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|g" "${{ github.workspace }}/email-body.html"
+          sed -i "s|REPORT_URL_PLACEHOLDER|${RUN_URL}|g" "${{ github.workspace }}/email-body.html"
+          sed -i "s|ARTIFACT_URL_PLACEHOLDER|${ARTIFACT_URL}|g" "${{ github.workspace }}/email-body.html"
 
           echo "Email body created:"
           cat "${{ github.workspace }}/email-body.html"
@@ -146,14 +145,14 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Send test results email
-        if: always()
+        if: failure()
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
           server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
+          subject: [FAILED] Ensemble Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
           to: vrajenthiran@eagleconsulting.co.in
           from: ${{ secrets.SMTP_FROM }}
           html_body: ${{ steps.email-body.outputs.html_body }}
