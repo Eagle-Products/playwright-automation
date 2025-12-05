@@ -30,6 +30,12 @@ on:
         required: true
       EMAIL_TO:
         required: true
+      TEST_APP_URL:
+        required: false
+      TEST_USERNAME:
+        required: false
+      TEST_PASSWORD:
+        required: false
 
 env:
   CI: true
