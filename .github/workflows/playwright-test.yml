@@ -28,6 +28,8 @@ on:
         required: true
       SMTP_FROM:
         required: true
+      EMAIL_TO:
+        required: true
 
 env:
   CI: true
@@ -153,6 +155,6 @@ jobs:
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
           subject: FAILED - Ensemble Playwright Test Results
-          to: vrajenthiran@eagleconsulting.co.in
+          to: ${{ secrets.EMAIL_TO }}
           from: ${{ secrets.SMTP_FROM }}
           html_body: ${{ steps.email-body.outputs.html_body }}
