@@ -110,7 +110,7 @@ jobs:
             STATUS_TEXT="Failed"
           fi
 
-          cat > email-body.html << 'EOF'
+          cat > email-body.html << EOF
           <html>
             <body style="font-family: Arial, sans-serif; font-size: 14px;">
               <h2>Playwright Test Results</h2>
@@ -118,7 +118,7 @@ jobs:
               <p><b>Branch:</b> ${{ github.ref_name }}</p>
               <p><b>Commit:</b> ${{ github.sha }}</p>
               <p><b>Run Number:</b> #${{ github.run_number }}</p>
-              <p><b>Status:</b> STATUS_PLACEHOLDER</p>
+              <p><b>Status:</b> ${STATUS_TEXT}</p>
 
               <p>
                 <b>View Report:</b><br/>
@@ -131,9 +131,6 @@ jobs:
             </body>
           </html>
           EOF
-
-          # Replace placeholder inside HTML safely
-          sed -i "s/STATUS_PLACEHOLDER/${STATUS_TEXT}/g" email-body.html
 
           echo "Email body created:"
           cat email-body.html
