@@ -103,11 +103,22 @@ jobs:
 
       - name: Upload Playwright Report as Artifact
         if: steps.test-run.outcome == 'failure'
+        id: upload-artifact
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report
           path: playwright-report
           retention-days: 2
+
+      - name: Get artifact ID
+        if: steps.test-run.outcome == 'failure'
+        id: artifact-info
+        run: |
+          ARTIFACT_ID=$(curl -s -H "Authorization: Bearer ${{ github.token }}" \
+            "${{ github.api_url }}/repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts" \
+            | jq -r '.artifacts[] | select(.name=="playwright-report") | .id')
+          echo "artifact-id=${ARTIFACT_ID}" >> $GITHUB_OUTPUT
+          echo "Artifact ID: ${ARTIFACT_ID}"
 
       - name: Prepare email body
         if: steps.test-run.outcome == 'failure'
@@ -116,12 +127,11 @@ jobs:
           cat > "${{ github.workspace }}/email-body.html" << 'EMAILEOF'
           <html>
           <body style="font-family: Arial, sans-serif; font-size: 14px;">
-          <h2>Playwright Test Results - Failed</h2>
+          <h2>Playwright Test Results - <span style="color: red; font-weight: bold;">Failed</span></h2>
           <p><b>Repository:</b> REPO_PLACEHOLDER</p>
           <p><b>Branch:</b> BRANCH_PLACEHOLDER</p>
           <p><b>Commit:</b> COMMIT_PLACEHOLDER</p>
-          <p><b>Run Number:</b> RUN_NUM_PLACEHOLDER</p>
-          <p><b>Status:</b> <span style="color: red; font-weight: bold;">Failed</span></p>
+          <p><b>Run Number:</b> RUN_NUM_PLACEHOLDER</p>          
           <p><b>View Run Details:</b><br/>
           <a href="REPORT_URL_PLACEHOLDER">Click here to open the GitHub Actions test report</a></p>
           <p><b>Download Test Artifacts:</b><br/>
@@ -131,7 +141,7 @@ jobs:
           EMAILEOF
 
           RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-          ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          ARTIFACT_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.artifact-info.outputs.artifact-id }}"
 
           sed -i "s|REPO_PLACEHOLDER|${{ github.repository }}|g" "${{ github.workspace }}/email-body.html"
           sed -i "s|BRANCH_PLACEHOLDER|${{ github.ref_name }}|g" "${{ github.workspace }}/email-body.html"
