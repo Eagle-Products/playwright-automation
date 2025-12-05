@@ -110,30 +110,33 @@ jobs:
             STATUS_TEXT="Failed"
           fi
 
-          cat > email-body.html << EOF
+          cat > "${{ github.workspace }}/email-body.html" << 'EMAILEOF'
           <html>
-            <body style="font-family: Arial, sans-serif; font-size: 14px;">
-              <h2>Playwright Test Results</h2>
-              <p><b>Repository:</b> ${{ github.repository }}</p>
-              <p><b>Branch:</b> ${{ github.ref_name }}</p>
-              <p><b>Commit:</b> ${{ github.sha }}</p>
-              <p><b>Run Number:</b> #${{ github.run_number }}</p>
-              <p><b>Status:</b> ${STATUS_TEXT}</p>
-
-              <p>
-                <b>View Report:</b><br/>
-                <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">
-                  Click here to open the GitHub Actions test report
-                </a>
-              </p>
-
-              <p>Artifacts retained for 2 days.</p>
-            </body>
+          <body style="font-family: Arial, sans-serif; font-size: 14px;">
+          <h2>Playwright Test Results</h2>
+          <p><b>Repository:</b> REPO_PLACEHOLDER</p>
+          <p><b>Branch:</b> BRANCH_PLACEHOLDER</p>
+          <p><b>Commit:</b> COMMIT_PLACEHOLDER</p>
+          <p><b>Run Number:</b> RUN_NUM_PLACEHOLDER</p>
+          <p><b>Status:</b> STATUS_PLACEHOLDER</p>
+          <p><b>View Report:</b><br/>
+          <a href="REPORT_URL_PLACEHOLDER">Click here to open the GitHub Actions test report</a></p>
+          <p>Artifacts retained for 2 days.</p>
+          </body>
           </html>
-          EOF
+          EMAILEOF
+
+          sed -i "s|REPO_PLACEHOLDER|${{ github.repository }}|g" "${{ github.workspace }}/email-body.html"
+          sed -i "s|BRANCH_PLACEHOLDER|${{ github.ref_name }}|g" "${{ github.workspace }}/email-body.html"
+          sed -i "s|COMMIT_PLACEHOLDER|${{ github.sha }}|g" "${{ github.workspace }}/email-body.html"
+          sed -i "s|RUN_NUM_PLACEHOLDER|#${{ github.run_number }}|g" "${{ github.workspace }}/email-body.html"
+          sed -i "s|STATUS_PLACEHOLDER|${STATUS_TEXT}|g" "${{ github.workspace }}/email-body.html"
+          sed -i "s|REPORT_URL_PLACEHOLDER|${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|g" "${{ github.workspace }}/email-body.html"
 
           echo "Email body created:"
-          cat email-body.html
+          cat "${{ github.workspace }}/email-body.html"
+          echo ""
+          echo "File size: $(wc -c < "${{ github.workspace }}/email-body.html") bytes"
 
       - name: Send test results email
         if: always()
@@ -146,5 +149,5 @@ jobs:
           subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
           to: vrajenthiran@eagleconsulting.co.in
           from: ${{ secrets.SMTP_FROM }}
-          body_path: email-body.html
+          body_path: ${{ github.workspace }}/email-body.html
           content_type: text/html
