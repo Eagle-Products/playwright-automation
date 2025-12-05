@@ -152,7 +152,7 @@ jobs:
           server_port: ${{ secrets.SMTP_PORT }}
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
-          subject: [FAILED] Ensemble Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
+          subject: FAILED - Ensemble Playwright Test Results
           to: vrajenthiran@eagleconsulting.co.in
           from: ${{ secrets.SMTP_FROM }}
           html_body: ${{ steps.email-body.outputs.html_body }}
