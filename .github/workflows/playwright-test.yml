@@ -147,7 +147,7 @@ jobs:
           username: ${{ secrets.SMTP_USERNAME }}
           password: ${{ secrets.SMTP_PASSWORD }}
           subject: Playwright Test Results - ${{ github.repository }} - ${{ github.ref_name }} - Run #${{ github.run_number }}
-          to: vrajenthiran@eagleconsulting.co.in
+          to: vigneshcse2k2k@gmail.com
           from: ${{ secrets.SMTP_FROM }}
           body_path: ${{ github.workspace }}/email-body.html
           content_type: text/html
