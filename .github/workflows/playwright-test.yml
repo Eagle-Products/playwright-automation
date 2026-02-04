@@ -129,10 +129,12 @@ jobs:
             python3 << 'PYEOF' > results-table.html
           import xml.etree.ElementTree as ET
           import html
+          TARGET_FILE = "z_visual_test.spec.ts"
           try:
               tree = ET.parse("playwright-results.xml")
               root = tree.getroot()
               rows = []
+              stdout_parts = []
               for elem in root.iter():
                   tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
                   if tag == "testcase":
@@ -141,14 +143,27 @@ jobs:
                       file_display = classname if classname else name
                       if not file_display:
                           file_display = "—"
+                      is_target_file = TARGET_FILE in classname or classname.endswith(TARGET_FILE) or TARGET_FILE in name
+                      system_out_text = ""
+                      for child in elem:
+                          ctag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
+                          if ctag == "system-out":
+                              system_out_text = "".join(child.itertext()).strip()
+                              break
+                      if is_target_file and system_out_text:
+                          stdout_parts.append(system_out_text)
                       has_failure = any("failure" in (c.tag.split("}")[-1] if "}" in c.tag else c.tag).lower() for c in elem)
                       status = "Failed" if has_failure else "Passed"
                       status_style = "color: red; font-weight: bold;" if has_failure else "color: green; font-weight: bold;"
                       rows.append("<tr><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(file_display) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\"><span style=\"" + status_style + "\">" + status + "</span></td></tr>")
+              out = ""
               if rows:
                   out = "<table style=\"border-collapse: collapse; width: 100%; max-width: 600px; margin: 12px 0;\"><thead><tr style=\"background: #f0f0f0;\"><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">File name</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
               else:
                   out = "<p><i>No test cases found in results.</i></p>"
+              if stdout_parts:
+                  combined_stdout = "\n---\n".join(stdout_parts)
+                  out += "<p style=\"margin-top: 16px;\"><b>Stdout for " + html.escape(TARGET_FILE) + ":</b></p><pre style=\"background: #f5f5f5; padding: 12px; border: 1px solid #ddd; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-wrap: break-word;\">" + html.escape(combined_stdout) + "</pre>"
               print(out)
           except Exception as e:
               print("<p><i>Results could not be parsed: " + html.escape(str(e)) + "</i></p>")
@@ -182,6 +197,7 @@ jobs:
           <html>
           <body style="font-family: Arial, sans-serif; font-size: 14px;">
           <h2>${HEADING}</h2>
+          <p><b>Region:</b> ${{ inputs.app_url }}</p>
           <p><b>Repository:</b> ${{ github.repository }}</p>
           <p><b>Branch:</b> ${{ github.ref_name }}</p>
           <p><b>Commit:</b> ${{ github.sha }}</p>
