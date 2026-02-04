@@ -129,7 +129,14 @@ jobs:
             python3 << 'PYEOF' > results-table.html
           import xml.etree.ElementTree as ET
           import html
+          import re
           TARGET_FILE = "z_visual_test.spec.ts"
+          def strip_ansi(text):
+              if not text:
+                  return text
+              text = re.sub(r"\x1b\[[0-9;]*m", "", text)
+              text = re.sub(r"\[\d+m", "", text)
+              return text
           try:
               tree = ET.parse("playwright-results.xml")
               root = tree.getroot()
@@ -148,7 +155,7 @@ jobs:
                       for child in elem:
                           ctag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
                           if ctag == "system-out":
-                              system_out_text = "".join(child.itertext()).strip()
+                              system_out_text = strip_ansi("".join(child.itertext()).strip())
                               break
                       if is_target_file and system_out_text:
                           stdout_parts.append(system_out_text)
