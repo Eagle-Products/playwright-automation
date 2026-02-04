@@ -84,12 +84,13 @@ jobs:
 
       - name: Run Playwright tests
         id: test-run
-        run: yarn test:e2e --reporter=html,github
+        run: yarn test:e2e --reporter=html,github,junit
         env:
           CI: true
           APP_URL: ${{ inputs.app_url }}
           TEST_USERNAME: ${{ inputs.username }}
           TEST_PASSWORD: ${{ inputs.password }}
+          PLAYWRIGHT_JUNIT_OUTPUT_FILE: playwright-results.xml
         continue-on-error: true
 
       - name: Archive test results
@@ -120,6 +121,42 @@ jobs:
           echo "artifact-id=${ARTIFACT_ID}" >> $GITHUB_OUTPUT
           echo "Artifact ID: ${ARTIFACT_ID}"
 
+      - name: Generate test results table
+        if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure')
+        id: results-table
+        run: |
+          if [ -f "playwright-results.xml" ]; then
+            python3 << 'PYEOF' > results-table.html
+          import xml.etree.ElementTree as ET
+          import html
+          try:
+              tree = ET.parse("playwright-results.xml")
+              root = tree.getroot()
+              rows = []
+              for elem in root.iter():
+                  tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
+                  if tag == "testcase":
+                      name = elem.get("name") or ""
+                      classname = elem.get("classname") or ""
+                      file_display = classname if classname else name
+                      if not file_display:
+                          file_display = "—"
+                      has_failure = any("failure" in (c.tag.split("}")[-1] if "}" in c.tag else c.tag).lower() for c in elem)
+                      status = "Failed" if has_failure else "Passed"
+                      status_style = "color: red; font-weight: bold;" if has_failure else "color: green; font-weight: bold;"
+                      rows.append("<tr><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(file_display) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\"><span style=\"" + status_style + "\">" + status + "</span></td></tr>")
+              if rows:
+                  out = "<table style=\"border-collapse: collapse; width: 100%; max-width: 600px; margin: 12px 0;\"><thead><tr style=\"background: #f0f0f0;\"><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">File name</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+              else:
+                  out = "<p><i>No test cases found in results.</i></p>"
+              print(out)
+          except Exception as e:
+              print("<p><i>Results could not be parsed: " + html.escape(str(e)) + "</i></p>")
+          PYEOF
+          else
+            echo '<p><i>Test results file not found.</i></p>' > results-table.html
+          fi
+
       - name: Prepare email body
         if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure')
         id: email-body
@@ -134,6 +171,13 @@ jobs:
             SUBJECT="PASSED - Ensemble Playwright Test Results"
           fi
 
+          RESULTS_TABLE=""
+          if [ -f "results-table.html" ]; then
+            RESULTS_TABLE=$(cat results-table.html)
+          else
+            RESULTS_TABLE="<p><i>Test results table not available.</i></p>"
+          fi
+
           cat > "${{ github.workspace }}/email-body.html" << EMAILEOF
           <html>
           <body style="font-family: Arial, sans-serif; font-size: 14px;">
@@ -143,6 +187,8 @@ jobs:
           <p><b>Commit:</b> ${{ github.sha }}</p>
           <p><b>Run Number:</b> #${{ github.run_number }}</p>
           <p><b>Status:</b> ${STATUS_HTML}</p>
+          <h3>Test Results</h3>
+          ${RESULTS_TABLE}
           <p><b>View Run Details:</b><br/>
           <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Click here to open the GitHub Actions test report</a></p>
           <p><b>Download Test Artifacts:</b><br/>
