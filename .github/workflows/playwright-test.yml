@@ -6,15 +6,12 @@ on:
       app_url:
         required: false
         type: string
-        default: 'https://ensembledev.eagleconsulting.co.in'
       username:
         required: false
         type: string
-        default: 'superuser'
       password:
         required: false
         type: string
-        default: 'Eagle@2025'
     secrets:
       NODE_AUTH_TOKEN:
         required: true
@@ -87,9 +84,9 @@ jobs:
         run: yarn test:e2e --reporter=html,github,junit
         env:
           CI: true
-          APP_URL: ${{ inputs.app_url }}
-          TEST_USERNAME: ${{ inputs.username }}
-          TEST_PASSWORD: ${{ inputs.password }}
+          APP_URL: ${{ inputs.app_url || secrets.TEST_APP_URL }}
+          TEST_USERNAME: ${{ inputs.username || secrets.TEST_USERNAME }}
+          TEST_PASSWORD: ${{ inputs.password || secrets.TEST_PASSWORD }}
           PLAYWRIGHT_JUNIT_OUTPUT_FILE: playwright-results.xml
         continue-on-error: true
 
@@ -204,7 +201,7 @@ jobs:
           <html>
           <body style="font-family: Arial, sans-serif; font-size: 14px;">
           <h2>${HEADING}</h2>
-          <p><b>Region:</b> ${{ inputs.app_url }}</p>
+          <p><b>Region:</b> ${{ inputs.app_url || secrets.TEST_APP_URL }}</p>
           <p><b>Repository:</b> ${{ github.repository }}</p>
           <p><b>Branch:</b> ${{ github.ref_name }}</p>
           <p><b>Commit:</b> ${{ github.sha }}</p>
