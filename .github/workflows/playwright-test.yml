@@ -38,6 +38,8 @@ on:
         required: false
       TEST_PASSWORD:
         required: false
+      TEST_ENVIRONMENT:
+        required: false
 
 env:
   CI: true
@@ -188,11 +190,11 @@ jobs:
           if [ "${{ steps.test-run.outcome }}" == "failure" ]; then
             HEADING="Playwright Test Results - Failed"
             STATUS_HTML="<span style=\"color: red; font-weight: bold;\">Failed</span>"
-            SUBJECT="Ensemble ${{ inputs.environment || secrets.ENVIRONMENT }}(Region) Automation Results - Failed"
+            SUBJECT="Ensemble ${{ inputs.environment || secrets.TEST_ENVIRONMENT }}(Region) Automation Results - Failed"
           else
             HEADING="Playwright Test Results - Passed"
             STATUS_HTML="<span style=\"color: green; font-weight: bold;\">Passed</span>"
-            SUBJECT="Ensemble ${{ inputs.environment || secrets.ENVIRONMENT }}(Region) Automation Results - Passed"
+            SUBJECT="Ensemble ${{ inputs.environment || secrets.TEST_ENVIRONMENT }}(Region) Automation Results - Passed"
           fi
 
           RESULTS_TABLE=""
