@@ -28,6 +28,8 @@ on:
         required: true
       SMTP_FROM:
         required: true
+      SMTP_FROM_NAME:
+        required: false
       EMAIL_TO:
         required: true
       TEST_APP_URL:
@@ -234,6 +236,16 @@ jobs:
             echo 'EOF'
           } >> $GITHUB_OUTPUT
 
+      - name: Prepare sender name
+        if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure')
+        id: sender-name
+        run: |
+          if [ -n "${{ secrets.SMTP_FROM_NAME }}" ]; then
+            echo "from=${{ secrets.SMTP_FROM_NAME }} <${{ secrets.SMTP_FROM }}>" >> $GITHUB_OUTPUT
+          else
+            echo "from=${{ secrets.SMTP_FROM }}" >> $GITHUB_OUTPUT
+          fi
+
       - name: Send test results email
         if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure')
         uses: dawidd6/action-send-mail@v3
@@ -244,5 +256,5 @@ jobs:
           password: ${{ secrets.SMTP_PASSWORD }}
           subject: ${{ steps.email-body.outputs.subject }}
           to: ${{ secrets.EMAIL_TO }}
-          from: ${{ secrets.SMTP_FROM }}
+          from: ${{ steps.sender-name.outputs.from }}
           html_body: ${{ steps.email-body.outputs.html_body }}
