@@ -170,7 +170,7 @@ jobs:
                   out = "<p><i>No test cases found in results.</i></p>"
               if stdout_parts:
                   combined_stdout = "\n---\n".join(stdout_parts)
-                  out += "<p style=\"margin-top: 16px;\"><b>Business Testing Summary:</b></p><pre style=\"background: #f5f5f5; padding: 12px; border: 1px solid #ddd; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-wrap: break-word;\">" + html.escape(combined_stdout) + "</pre>"
+                  out += "<h3 style=\"margin-top: 16px;\">Business Testing Summary</h3><pre style=\"background: #f5f5f5; padding: 12px; border: 1px solid #ddd; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-wrap: break-word;\">" + html.escape(combined_stdout) + "</pre>"
               print(out)
           except Exception as e:
               print("<p><i>Results could not be parsed: " + html.escape(str(e)) + "</i></p>")
@@ -203,9 +203,9 @@ jobs:
           cat > "${{ github.workspace }}/email-body.html" << EMAILEOF
           <html>
           <body style="font-family: Arial, sans-serif; font-size: 14px;">
-          <h3>Functional Testing Summary:</h3>
+          <h3>Functional Testing Summary</h3>
           ${RESULTS_TABLE}
-          <h2>Details</h2>
+          <h3>Details</h3>
           <p><b>Region:</b> ${{ inputs.app_url || secrets.TEST_APP_URL }}</p>
           <p><b>Repository:</b> ${{ github.repository }}</p>
           <p><b>Branch:</b> ${{ github.ref_name }}</p>
