@@ -12,6 +12,9 @@ on:
       password:
         required: false
         type: string
+      environment:
+        required: false
+        type: string
     secrets:
       NODE_AUTH_TOKEN:
         required: true
@@ -167,7 +170,7 @@ jobs:
                   out = "<p><i>No test cases found in results.</i></p>"
               if stdout_parts:
                   combined_stdout = "\n---\n".join(stdout_parts)
-                  out += "<p style=\"margin-top: 16px;\"><b>End to End Testing Summary:</b></p><pre style=\"background: #f5f5f5; padding: 12px; border: 1px solid #ddd; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-wrap: break-word;\">" + html.escape(combined_stdout) + "</pre>"
+                  out += "<p style=\"margin-top: 16px;\"><b>Business Testing Summary:</b></p><pre style=\"background: #f5f5f5; padding: 12px; border: 1px solid #ddd; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-wrap: break-word;\">" + html.escape(combined_stdout) + "</pre>"
               print(out)
           except Exception as e:
               print("<p><i>Results could not be parsed: " + html.escape(str(e)) + "</i></p>")
@@ -183,11 +186,11 @@ jobs:
           if [ "${{ steps.test-run.outcome }}" == "failure" ]; then
             HEADING="Playwright Test Results - Failed"
             STATUS_HTML="<span style=\"color: red; font-weight: bold;\">Failed</span>"
-            SUBJECT="FAILED - Ensemble Playwright Test Results"
+            SUBJECT="Ensemble ${{ inputs.environment || secrets.ENVIRONMENT }}(Region) Automation Results - Failed"
           else
             HEADING="Playwright Test Results - Passed"
             STATUS_HTML="<span style=\"color: green; font-weight: bold;\">Passed</span>"
-            SUBJECT="PASSED - Ensemble Playwright Test Results"
+            SUBJECT="Ensemble ${{ inputs.environment || secrets.ENVIRONMENT }}(Region) Automation Results - Passed"
           fi
 
           RESULTS_TABLE=""
@@ -200,15 +203,15 @@ jobs:
           cat > "${{ github.workspace }}/email-body.html" << EMAILEOF
           <html>
           <body style="font-family: Arial, sans-serif; font-size: 14px;">
-          <h2>${HEADING}</h2>
+          <h3>Functional Testing Summary:</h3>
+          ${RESULTS_TABLE}
+          <h2>Details</h2>
           <p><b>Region:</b> ${{ inputs.app_url || secrets.TEST_APP_URL }}</p>
           <p><b>Repository:</b> ${{ github.repository }}</p>
           <p><b>Branch:</b> ${{ github.ref_name }}</p>
           <p><b>Commit:</b> ${{ github.sha }}</p>
           <p><b>Run Number:</b> #${{ github.run_number }}</p>
           <p><b>Status:</b> ${STATUS_HTML}</p>
-          <h3>Functional Testing Summary:</h3>
-          ${RESULTS_TABLE}
           <p><b>View Run Details:</b><br/>
           <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Click here to open the GitHub Actions test report</a></p>
           <p><b>Download Test Artifacts:</b><br/>
