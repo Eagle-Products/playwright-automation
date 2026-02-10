@@ -134,18 +134,25 @@ jobs:
           import xml.etree.ElementTree as ET
           import html
           import re
+
           TARGET_FILE = "z_visual_test.spec.ts"
-          def strip_ansi(text):
+
+          def strip_ansi(text: str) -> str:
               if not text:
                   return text
+              # Strip ANSI escape sequences and stray codes like [32m, [39m
               text = re.sub(r"\x1b\[[0-9;]*m", "", text)
               text = re.sub(r"\[\d+m", "", text)
               return text
+
           try:
               tree = ET.parse("playwright-results.xml")
               root = tree.getroot()
-              rows = []
+
+              # Collect entries as (file_display, is_failed)
+              entries = []
               stdout_parts = []
+
               for elem in root.iter():
                   tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
                   if tag == "testcase":
@@ -154,7 +161,15 @@ jobs:
                       file_display = classname if classname else name
                       if not file_display:
                           file_display = "—"
-                      is_target_file = TARGET_FILE in classname or classname.endswith(TARGET_FILE) or TARGET_FILE in name
+
+                      # Identify our visual comparison spec file
+                      is_target_file = (
+                          TARGET_FILE in classname
+                          or classname.endswith(TARGET_FILE)
+                          or TARGET_FILE in name
+                      )
+
+                      # Capture stdout for that spec, if present
                       system_out_text = ""
                       for child in elem:
                           ctag = child.tag.split("}")[-1] if "}" in child.tag else child.tag
@@ -163,18 +178,82 @@ jobs:
                               break
                       if is_target_file and system_out_text:
                           stdout_parts.append(system_out_text)
-                      has_failure = any("failure" in (c.tag.split("}")[-1] if "}" in c.tag else c.tag).lower() for c in elem)
-                      status = "Failed" if has_failure else "Passed"
-                      status_style = "color: red; font-weight: bold;" if has_failure else "color: green; font-weight: bold;"
-                      rows.append("<tr><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(file_display) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\"><span style=\"" + status_style + "\">" + status + "</span></td></tr>")
-              out = ""
-              if rows:
-                  out = "<table style=\"border-collapse: collapse; width: 100%; max-width: 600px; margin: 12px 0;\"><thead><tr style=\"background: #f0f0f0;\"><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">File name</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+
+                      has_failure = any(
+                          "failure" in (
+                              c.tag.split("}")[-1] if "}" in c.tag else c.tag
+                          ).lower()
+                          for c in elem
+                      )
+                      is_failed = bool(has_failure)
+                      entries.append((file_display, is_failed))
+
+              if entries:
+                  total_executed = len(entries)
+                  total_failed = sum(1 for _, failed in entries if failed)
+                  total_passed = total_executed - total_failed
+
+                  # Main detail rows with Number, File name, Status
+                  row_html = []
+                  for idx, (file_display, failed) in enumerate(entries, start=1):
+                      status = "Failed" if failed else "Passed"
+                      status_style = (
+                          "color: red; font-weight: bold;"
+                          if failed
+                          else "color: green; font-weight: bold;"
+                      )
+                      row_html.append(
+                          "<tr>"
+                          f"<td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: right;\">{idx}</td>"
+                          f"<td style=\"padding: 6px 12px; border: 1px solid #ddd;\">{html.escape(file_display)}</td>"
+                          f"<td style=\"padding: 6px 12px; border: 1px solid #ddd;\"><span style=\"{status_style}\">{status}</span></td>"
+                          "</tr>"
+                      )
+
+                  # Summary rows at the bottom of the same table
+                  summary_rows = [
+                      ("Total Cases Executed", total_executed, ""),
+                      ("Total Cases Passed", total_passed, "color: green; font-weight: bold;"),
+                      ("Total Cases Failed", total_failed, "color: red; font-weight: bold;"),
+                  ]
+
+                  summary_html = []
+                  for label, value, extra_style in summary_rows:
+                      summary_html.append(
+                          "<tr>"
+                          f"<td colspan=\"2\" style=\"padding: 6px 12px; border: 1px solid #ddd; font-weight: bold;\">{html.escape(str(label))}</td>"
+                          f"<td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: right; {extra_style}\">{html.escape(str(value))}</td>"
+                          "</tr>"
+                      )
+
+                  out = (
+                      "<table style=\"border-collapse: collapse; width: 100%; max-width: 700px; "
+                      "margin: 12px 0; font-size: 13px;\">"
+                      "<thead>"
+                      "<tr style=\"background: #f0f0f0;\">"
+                      "<th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: right;\">Number</th>"
+                      "<th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">File name</th>"
+                      "<th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th>"
+                      "</tr>"
+                      "</thead>"
+                      "<tbody>"
+                      + \"\".join(row_html + summary_html)
+                      + "</tbody></table>"
+                  )
               else:
                   out = "<p><i>No test cases found in results.</i></p>"
+
+              # Append stdout section for the visual spec, if any
               if stdout_parts:
                   combined_stdout = "\n---\n".join(stdout_parts)
-                  out += "<h3 style=\"margin-top: 16px;\">Business Testing Summary</h3><pre style=\"background: #f5f5f5; padding: 12px; border: 1px solid #ddd; overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-wrap: break-word;\">" + html.escape(combined_stdout) + "</pre>"
+                  out += (
+                      "<h3 style=\"margin-top: 16px;\">Business Testing Summary</h3>"
+                      "<pre style=\"background: #f5f5f5; padding: 12px; border: 1px solid #ddd; "
+                      "overflow-x: auto; font-size: 12px; white-space: pre-wrap; word-wrap: break-word;\">"
+                      + html.escape(combined_stdout)
+                      + "</pre>"
+                  )
+
               print(out)
           except Exception as e:
               print("<p><i>Results could not be parsed: " + html.escape(str(e)) + "</i></p>")
@@ -190,11 +269,11 @@ jobs:
           if [ "${{ steps.test-run.outcome }}" == "failure" ]; then
             HEADING="Playwright Test Results - Failed"
             STATUS_HTML="<span style=\"color: red; font-weight: bold;\">Failed</span>"
-            SUBJECT="Ensemble ${{ inputs.environment || secrets.TEST_ENVIRONMENT }}(Region) Automation Results - Failed"
+            SUBJECT="Ensemble ${{ inputs.environment || secrets.TEST_ENVIRONMENT }}(Region) Automation TestResults - Failed"
           else
             HEADING="Playwright Test Results - Passed"
             STATUS_HTML="<span style=\"color: green; font-weight: bold;\">Passed</span>"
-            SUBJECT="Ensemble ${{ inputs.environment || secrets.TEST_ENVIRONMENT }}(Region) Automation Results - Passed"
+            SUBJECT="Ensemble ${{ inputs.environment || secrets.TEST_ENVIRONMENT }}(Region) Automation Test Results - Passed"
           fi
 
           RESULTS_TABLE=""
@@ -204,22 +283,53 @@ jobs:
             RESULTS_TABLE="<p><i>Test results table not available.</i></p>"
           fi
 
+          RUN_DATE="$(date -u +"%Y-%m-%d %H:%M:%S UTC")"
+
           cat > "${{ github.workspace }}/email-body.html" << EMAILEOF
           <html>
           <body style="font-family: Arial, sans-serif; font-size: 14px;">
           <h3>Functional Testing Summary</h3>
           ${RESULTS_TABLE}
+
           <h3>Details</h3>
-          <p><b>Region:</b> ${{ inputs.app_url || secrets.TEST_APP_URL }}</p>
-          <p><b>Repository:</b> ${{ github.repository }}</p>
-          <p><b>Branch:</b> ${{ github.ref_name }}</p>
-          <p><b>Commit:</b> ${{ github.sha }}</p>
-          <p><b>Run Number:</b> #${{ github.run_number }}</p>
+          <table style="border-collapse: collapse; width: 100%; max-width: 700px; margin: 12px 0; font-size: 13px;">
+            <thead>
+              <tr style="background: #f0f0f0;">
+                <th style="padding: 8px 12px; border: 1px solid #ddd; text-align: left;">Details</th>
+                <th style="padding: 8px 12px; border: 1px solid #ddd; text-align: left;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding: 6px 12px; border: 1px solid #ddd;">Region</td>
+                <td style="padding: 6px 12px; border: 1px solid #ddd;">${{ inputs.environment || secrets.TEST_ENVIRONMENT }}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 12px; border: 1px solid #ddd;">Repository</td>
+                <td style="padding: 6px 12px; border: 1px solid #ddd;">${{ github.repository }}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 12px; border: 1px solid #ddd;">Run date</td>
+                <td style="padding: 6px 12px; border: 1px solid #ddd;">${RUN_DATE}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 12px; border: 1px solid #ddd;">Run data</td>
+                <td style="padding: 6px 12px; border: 1px solid #ddd;">Run #${{ github.run_number }}</td>
+              </tr>
+              <tr>
+                <td style="padding: 6px 12px; border: 1px solid #ddd;">Test Artifacts</td>
+                <td style="padding: 6px 12px; border: 1px solid #ddd;">
+                  <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.artifact-info.outputs.artifact-id }}">
+                    Click here to download the Playwright test report artifacts
+                  </a>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
           <p><b>Status:</b> ${STATUS_HTML}</p>
           <p><b>View Run Details:</b><br/>
           <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">Click here to open the GitHub Actions test report</a></p>
-          <p><b>Download Test Artifacts:</b><br/>
-          <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts/${{ steps.artifact-info.outputs.artifact-id }}">Click here to download the Playwright test report artifacts</a></p>
           <p>Artifacts retained for 2 days.</p>
           </body>
           </html>
