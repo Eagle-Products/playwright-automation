@@ -144,7 +144,7 @@ jobs:
           try:
               tree = ET.parse("playwright-results.xml")
               root = tree.getroot()
-              rows = []
+              entries = []
               stdout_parts = []
               for elem in root.iter():
                   tag = elem.tag.split("}")[-1] if "}" in elem.tag else elem.tag
@@ -164,12 +164,28 @@ jobs:
                       if is_target_file and system_out_text:
                           stdout_parts.append(system_out_text)
                       has_failure = any("failure" in (c.tag.split("}")[-1] if "}" in c.tag else c.tag).lower() for c in elem)
-                      status = "Failed" if has_failure else "Passed"
-                      status_style = "color: red; font-weight: bold;" if has_failure else "color: green; font-weight: bold;"
-                      rows.append("<tr><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(file_display) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\"><span style=\"" + status_style + "\">" + status + "</span></td></tr>")
+                      is_failed = bool(has_failure)
+                      entries.append((file_display, is_failed))
               out = ""
-              if rows:
-                  out = "<table style=\"border-collapse: collapse; width: 100%; max-width: 600px; margin: 12px 0;\"><thead><tr style=\"background: #f0f0f0;\"><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">File name</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th></tr></thead><tbody>" + "".join(rows) + "</tbody></table>"
+              if entries:
+                  total_executed = len(entries)
+                  total_failed = sum(1 for _, failed in entries if failed)
+                  total_passed = total_executed - total_failed
+                  row_html = []
+                  for idx, (file_display, failed) in enumerate(entries, start=1):
+                      status = "Failed" if failed else "Passed"
+                      status_style = "color: red; font-weight: bold;" if failed else "color: green; font-weight: bold;"
+                      row_html.append("<tr><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: right;\">" + str(idx) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(file_display) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\"><span style=\"" + status_style + "\">" + status + "</span></td></tr>")
+                  summary_rows = [
+                      ("Total Cases Executed", total_executed, ""),
+                      ("Total Cases Passed", total_passed, "color: green; font-weight: bold;"),
+                      ("Total Cases Failed", total_failed, "color: red; font-weight: bold;"),
+                  ]
+                  summary_html = []
+                  for label, value, extra_style in summary_rows:
+                      summary_html.append("<tr><td colspan=\"2\" style=\"padding: 6px 12px; border: 1px solid #ddd; font-weight: bold;\">" + html.escape(str(label)) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: right; " + extra_style + "\">" + html.escape(str(value)) + "</td></tr>")
+                  table_rows = "".join(row_html + summary_html)
+                  out = "<table style=\"border-collapse: collapse; width: 100%; max-width: 700px; margin: 12px 0; font-size: 13px;\"><thead><tr style=\"background: #f0f0f0;\"><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: right;\">Number</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">File name</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th></tr></thead><tbody>" + table_rows + "</tbody></table>"
               else:
                   out = "<p><i>No test cases found in results.</i></p>"
               if stdout_parts:
