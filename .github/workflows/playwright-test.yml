@@ -183,9 +183,9 @@ jobs:
                   ]
                   summary_html = []
                   for label, value, extra_style in summary_rows:
-                      summary_html.append("<tr><td colspan=\"2\" style=\"padding: 6px 12px; border: 1px solid #ddd; font-weight: bold;\">" + html.escape(str(label)) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: right; " + extra_style + "\">" + html.escape(str(value)) + "</td></tr>")
+                      summary_html.append("<tr><td colspan=\"2\" style=\"padding: 6px 12px; border: 1px solid #ddd; font-weight: bold; text-align: center;\">" + html.escape(str(label)) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: center; " + extra_style + "\">" + html.escape(str(value)) + "</td></tr>")
                   table_rows = "".join(row_html + summary_html)
-                  out = "<table style=\"border-collapse: collapse; width: 100%; max-width: 700px; margin: 12px 0; font-size: 13px;\"><thead><tr style=\"background: #f0f0f0;\"><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: right;\">Number</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">File name</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th></tr></thead><tbody>" + table_rows + "</tbody></table>"
+                  out = "<table style=\"border-collapse: collapse; width: 100%; max-width: 700px; margin: 12px 0; font-size: 13px;\"><thead><tr style=\"background: #f0f0f0;\"><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: right;\">Number</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Test Script</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th></tr></thead><tbody>" + table_rows + "</tbody></table>"
               else:
                   out = "<p><i>No test cases found in results.</i></p>"
               if stdout_parts:
@@ -206,11 +206,11 @@ jobs:
           if [ "${{ steps.test-run.outcome }}" == "failure" ]; then
             HEADING="Playwright Test Results - Failed"
             STATUS_HTML="<span style=\"color: red; font-weight: bold;\">Failed</span>"
-            SUBJECT="Ensemble ${{ inputs.environment || secrets.TEST_ENVIRONMENT }}(Region) Automation Results - Failed"
+            SUBJECT="Ensemble ${{ inputs.environment || secrets.TEST_ENVIRONMENT }} Automation Results"
           else
             HEADING="Playwright Test Results - Passed"
             STATUS_HTML="<span style=\"color: green; font-weight: bold;\">Passed</span>"
-            SUBJECT="Ensemble ${{ inputs.environment || secrets.TEST_ENVIRONMENT }}(Region) Automation Results - Passed"
+            SUBJECT="Ensemble ${{ inputs.environment || secrets.TEST_ENVIRONMENT }} Automation Results"
           fi
 
           RESULTS_TABLE=""
