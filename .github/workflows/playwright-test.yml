@@ -40,6 +40,8 @@ on:
         required: false
       TEST_ENVIRONMENT:
         required: false
+      TEST_CASE_NAMES:
+        required: false
 
 env:
   CI: true
@@ -128,13 +130,28 @@ jobs:
       - name: Generate test results table
         if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure')
         id: results-table
+        env:
+          TEST_CASE_NAMES_JSON: ${{ secrets.TEST_CASE_NAMES }}
         run: |
           if [ -f "playwright-results.xml" ]; then
             python3 << 'PYEOF' > results-table.html
           import xml.etree.ElementTree as ET
           import html
           import re
+          import os
+          import json
           TARGET_FILE = "z_visual_test.spec.ts"
+          try:
+              test_case_names = json.loads(os.environ.get("TEST_CASE_NAMES_JSON", "{}"))
+          except (json.JSONDecodeError, TypeError):
+              test_case_names = {}
+          def script_to_key(script):
+              base = script.split("/")[-1] if "/" in script else script
+              if base.endswith(".spec.ts"):
+                  return base[:-9]
+              if base.endswith(".spec.js"):
+                  return base[:-9]
+              return base
           def strip_ansi(text):
               if not text:
                   return text
@@ -175,7 +192,9 @@ jobs:
                   for idx, (file_display, failed) in enumerate(entries, start=1):
                       status = "Failed" if failed else "Passed"
                       status_style = "color: red; font-weight: bold;" if failed else "color: green; font-weight: bold;"
-                      row_html.append("<tr><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: right;\">" + str(idx) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(file_display) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\"><span style=\"" + status_style + "\">" + status + "</span></td></tr>")
+                      key = script_to_key(file_display)
+                      test_name = test_case_names.get(key, "")
+                      row_html.append("<tr><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: right;\">" + str(idx) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(file_display) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(test_name) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\"><span style=\"" + status_style + "\">" + status + "</span></td></tr>")
                   summary_rows = [
                       ("Total Cases Executed", total_executed, ""),
                       ("Total Cases Passed", total_passed, "color: green; font-weight: bold;"),
@@ -183,9 +202,9 @@ jobs:
                   ]
                   summary_html = []
                   for label, value, extra_style in summary_rows:
-                      summary_html.append("<tr><td colspan=\"2\" style=\"padding: 6px 12px; border: 1px solid #ddd; font-weight: bold; text-align: center;\">" + html.escape(str(label)) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: center; " + extra_style + "\">" + html.escape(str(value)) + "</td></tr>")
+                      summary_html.append("<tr><td colspan=\"3\" style=\"padding: 6px 12px; border: 1px solid #ddd; font-weight: bold; text-align: left; padding-left: 24px;\">" + html.escape(str(label)) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: right; " + extra_style + "\">" + html.escape(str(value)) + "</td></tr>")
                   table_rows = "".join(row_html + summary_html)
-                  out = "<table style=\"border-collapse: collapse; width: 100%; max-width: 700px; margin: 12px 0; font-size: 13px;\"><thead><tr style=\"background: #f0f0f0;\"><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: right;\">Number</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Test Script</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th></tr></thead><tbody>" + table_rows + "</tbody></table>"
+                  out = "<table style=\"border-collapse: collapse; width: 100%; max-width: 700px; margin: 12px 0; font-size: 13px;\"><thead><tr style=\"background: #f0f0f0;\"><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: right;\">Number</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Test Script</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Test Name</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th></tr></thead><tbody>" + table_rows + "</tbody></table>"
               else:
                   out = "<p><i>No test cases found in results.</i></p>"
               if stdout_parts:
