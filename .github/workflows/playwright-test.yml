@@ -133,6 +133,13 @@ jobs:
         env:
           TEST_CASE_NAMES_JSON: ${{ secrets.TEST_CASE_NAMES }}
         run: |
+          echo "=== DEBUG TEST_CASE_NAMES ==="
+          if [ -z "${TEST_CASE_NAMES_JSON:-}" ]; then
+            echo "TEST_CASE_NAMES_JSON is empty or not set"
+          else
+            echo "TEST_CASE_NAMES_JSON length: ${#TEST_CASE_NAMES_JSON}"
+            echo "TEST_CASE_NAMES_JSON (value will be masked if secret): $TEST_CASE_NAMES_JSON"
+          fi
           if [ -f "playwright-results.xml" ]; then
             python3 << 'PYEOF' > results-table.html
           import xml.etree.ElementTree as ET
@@ -140,11 +147,16 @@ jobs:
           import re
           import os
           import json
+          import sys
           TARGET_FILE = "z_visual_test.spec.ts"
+          raw = os.environ.get("TEST_CASE_NAMES_JSON", "{}")
+          sys.stderr.write("DEBUG: TEST_CASE_NAMES_JSON raw length: %s\n" % len(raw))
           try:
-              test_case_names = json.loads(os.environ.get("TEST_CASE_NAMES_JSON", "{}"))
-          except (json.JSONDecodeError, TypeError):
+              test_case_names = json.loads(raw) if raw else {}
+          except (json.JSONDecodeError, TypeError) as e:
+              sys.stderr.write("DEBUG: json load failed: %s\n" % repr(e))
               test_case_names = {}
+          sys.stderr.write("DEBUG: test_case_names count: %s, keys: %s\n" % (len(test_case_names), list(test_case_names.keys())[:15]))
           def script_to_key(script):
               base = script.split("/")[-1] if "/" in script else script
               if base.endswith(".spec.ts"):
@@ -194,6 +206,8 @@ jobs:
                       status_style = "color: red; font-weight: bold;" if failed else "color: green; font-weight: bold;"
                       key = script_to_key(file_display)
                       test_name = test_case_names.get(key, "")
+                      if idx == 1:
+                          sys.stderr.write("DEBUG: first row file_display=%r -> key=%r -> test_name=%r\n" % (file_display, key, test_name))
                       row_html.append("<tr><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: right;\">" + str(idx) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(file_display) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(test_name) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\"><span style=\"" + status_style + "\">" + status + "</span></td></tr>")
                   summary_rows = [
                       ("Total Cases Executed", total_executed, ""),
