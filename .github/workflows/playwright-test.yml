@@ -164,6 +164,20 @@ jobs:
               if base.endswith(".spec.js"):
                   return base[:-9]
               return base
+          def get_test_name_for_script(script, test_case_names):
+              """Look up test name by script filename. JSON keys are full filenames e.g. 'a1_login_logout.spec.ts'."""
+              base = script.split("/")[-1] if "/" in script else script
+              # Exact match (XML has full filename)
+              if base in test_case_names:
+                  return test_case_names[base]
+              # Try with .spec.ts if XML classname was truncated (no extension)
+              if not base.endswith(".spec.ts") and (base + ".spec.ts") in test_case_names:
+                  return test_case_names[base + ".spec.ts"]
+              # Fallback: match by prefix (e.g. XML gives 'a1_login_logou', JSON has 'a1_login_logout.spec.ts')
+              for k in test_case_names:
+                  if k.startswith(base) or base.startswith(k.replace(".spec.ts", "").replace(".spec.js", "")):
+                      return test_case_names[k]
+              return ""
           def strip_ansi(text):
               if not text:
                   return text
@@ -204,10 +218,10 @@ jobs:
                   for idx, (file_display, failed) in enumerate(entries, start=1):
                       status = "Failed" if failed else "Passed"
                       status_style = "color: red; font-weight: bold;" if failed else "color: green; font-weight: bold;"
-                      key = script_to_key(file_display)
-                      test_name = test_case_names.get(key, "")
+                      test_name = get_test_name_for_script(file_display, test_case_names)
                       if idx == 1:
-                          sys.stderr.write("DEBUG: first row file_display=%r -> key=%r -> test_name=%r\n" % (file_display, key, test_name))
+                          base = file_display.split("/")[-1] if "/" in file_display else file_display
+                          sys.stderr.write("DEBUG: first row file_display=%r -> base=%r -> test_name=%r\n" % (file_display, base, test_name))
                       row_html.append("<tr><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: right;\">" + str(idx) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(file_display) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\">" + html.escape(test_name) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd;\"><span style=\"" + status_style + "\">" + status + "</span></td></tr>")
                   summary_rows = [
                       ("Total Cases Executed", total_executed, ""),
@@ -216,7 +230,7 @@ jobs:
                   ]
                   summary_html = []
                   for label, value, extra_style in summary_rows:
-                      summary_html.append("<tr><td colspan=\"2\" style=\"padding: 6px 12px; border: 1px solid #ddd; font-weight: bold; text-align: center;\">" + html.escape(str(label)) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: center; " + extra_style + "\">" + html.escape(str(value)) + "</td></tr>")
+                      summary_html.append("<tr><td colspan=\"3\" style=\"padding: 6px 12px; border: 1px solid #ddd; font-weight: bold; text-align: center;\">" + html.escape(str(label)) + "</td><td style=\"padding: 6px 12px; border: 1px solid #ddd; text-align: center; " + extra_style + "\">" + html.escape(str(value)) + "</td></tr>")
                   table_rows = "".join(row_html + summary_html)
                   out = "<table style=\"border-collapse: collapse; width: 100%; max-width: 700px; margin: 12px 0; font-size: 13px;\"><thead><tr style=\"background: #f0f0f0;\"><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: right;\">Number</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Test Script</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Test Name</th><th style=\"padding: 8px 12px; border: 1px solid #ddd; text-align: left;\">Status</th></tr></thead><tbody>" + table_rows + "</tbody></table>"
               else:
