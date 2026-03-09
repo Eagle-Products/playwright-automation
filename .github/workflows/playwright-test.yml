@@ -355,6 +355,7 @@ jobs:
         id: sender-name
         run: |
           AUTO_MAIL_TYPE="${{ secrets.AUTO_MAIL_TYPE }}"
+          echo "use_office_mail=$([ \"$AUTO_MAIL_TYPE\" = 'OFFICE' ] && echo 'true' || echo 'false')" >> $GITHUB_OUTPUT
           if [ "$AUTO_MAIL_TYPE" = "OFFICE" ] && [ -n "${{ secrets.MSO_EMAIL_FROM }}" ]; then
             echo "from=${{ secrets.MSO_EMAIL_FROM }}" >> $GITHUB_OUTPUT
           elif [ -n "${{ secrets.SMTP_FROM_NAME }}" ]; then
@@ -364,7 +365,7 @@ jobs:
           fi
 
       - name: Send test results email (Gmail)
-        if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure') && (secrets.AUTO_MAIL_TYPE != 'OFFICE')
+        if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure') && (steps.sender-name.outputs.use_office_mail != 'true')
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -377,7 +378,7 @@ jobs:
           html_body: ${{ steps.email-body.outputs.html_body }}
 
       - name: Send test results email (Office 365)
-        if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure') && (secrets.AUTO_MAIL_TYPE == 'OFFICE')
+        if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure') && (steps.sender-name.outputs.use_office_mail == 'true')
         env:
           MSO_TENANT_ID: ${{ secrets.MSO_TENANT_ID }}
           MSO_CLIENT_ID: ${{ secrets.MSO_CLIENT_ID }}
