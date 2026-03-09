@@ -18,17 +18,27 @@ on:
     secrets:
       NODE_AUTH_TOKEN:
         required: true
+      AUTO_MAIL_TYPE:
+        required: false
       SMTP_SERVER:
-        required: true
+        required: false
       SMTP_PORT:
-        required: true
+        required: false
       SMTP_USERNAME:
-        required: true
+        required: false
       SMTP_PASSWORD:
-        required: true
+        required: false
       SMTP_FROM:
-        required: true
+        required: false
       SMTP_FROM_NAME:
+        required: false
+      MSO_CLIENT_ID:
+        required: false
+      MSO_CLIENT_SECRET:
+        required: false
+      MSO_EMAIL_FROM:
+        required: false
+      MSO_TENANT_ID:
         required: false
       EMAIL_TO:
         required: true
@@ -344,14 +354,17 @@ jobs:
         if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure')
         id: sender-name
         run: |
-          if [ -n "${{ secrets.SMTP_FROM_NAME }}" ]; then
+          AUTO_MAIL_TYPE="${{ secrets.AUTO_MAIL_TYPE }}"
+          if [ "$AUTO_MAIL_TYPE" = "OFFICE" ] && [ -n "${{ secrets.MSO_EMAIL_FROM }}" ]; then
+            echo "from=${{ secrets.MSO_EMAIL_FROM }}" >> $GITHUB_OUTPUT
+          elif [ -n "${{ secrets.SMTP_FROM_NAME }}" ]; then
             echo "from=${{ secrets.SMTP_FROM_NAME }} <${{ secrets.SMTP_FROM }}>" >> $GITHUB_OUTPUT
           else
             echo "from=${{ secrets.SMTP_FROM }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Send test results email
-        if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure')
+      - name: Send test results email (Gmail)
+        if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure') && (secrets.AUTO_MAIL_TYPE != 'OFFICE')
         uses: dawidd6/action-send-mail@v3
         with:
           server_address: ${{ secrets.SMTP_SERVER }}
@@ -362,3 +375,57 @@ jobs:
           to: ${{ secrets.EMAIL_TO }}
           from: ${{ steps.sender-name.outputs.from }}
           html_body: ${{ steps.email-body.outputs.html_body }}
+
+      - name: Send test results email (Office 365)
+        if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure') && (secrets.AUTO_MAIL_TYPE == 'OFFICE')
+        env:
+          MSO_TENANT_ID: ${{ secrets.MSO_TENANT_ID }}
+          MSO_CLIENT_ID: ${{ secrets.MSO_CLIENT_ID }}
+          MSO_CLIENT_SECRET: ${{ secrets.MSO_CLIENT_SECRET }}
+          MSO_EMAIL_FROM: ${{ secrets.MSO_EMAIL_FROM }}
+          EMAIL_TO: ${{ secrets.EMAIL_TO }}
+          SUBJECT: ${{ steps.email-body.outputs.subject }}
+          HTML_FILE: ${{ github.workspace }}/email-body.html
+        run: |
+          # MSO_TENANT_ID: use your Azure AD tenant GUID (Azure Portal > Microsoft Entra ID > Overview). Use "common" only if your app is multi-tenant.
+          TENANT="${MSO_TENANT_ID:-common}"
+          TOKEN_URL="https://login.microsoftonline.com/${TENANT}/oauth2/v2.0/token"
+          echo "Getting token from ${TOKEN_URL} ..."
+          TOKEN=$(curl -s -X POST "$TOKEN_URL" \
+            -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "client_id=${MSO_CLIENT_ID}" \
+            -d "client_secret=${MSO_CLIENT_SECRET}" \
+            -d "grant_type=client_credentials" \
+            -d "scope=https://graph.microsoft.com/.default" \
+            | jq -r '.access_token // empty')
+          if [ -z "$TOKEN" ]; then
+            echo "::error::Failed to get Office 365 access token. Check MSO_CLIENT_ID, MSO_CLIENT_SECRET, and MSO_TENANT_ID."
+            exit 1
+          fi
+          python3 << 'PYEOF'
+          import json
+          import os
+          html_path = os.environ["HTML_FILE"]
+          with open(html_path, "r", encoding="utf-8") as f:
+              content = f.read()
+          to_addresses = [addr.strip() for addr in os.environ["EMAIL_TO"].split(",") if addr.strip()]
+          payload = {
+              "message": {
+                  "subject": os.environ["SUBJECT"],
+                  "body": {"contentType": "HTML", "content": content},
+                  "toRecipients": [{"emailAddress": {"address": addr}} for addr in to_addresses]
+              },
+              "saveToSentItems": False
+          }
+          with open("/tmp/graph-mail.json", "w", encoding="utf-8") as out:
+              json.dump(payload, out, ensure_ascii=False)
+          PYEOF
+          HTTP_CODE=$(curl -s -o /tmp/graph-response.txt -w "%{http_code}" -X POST "https://graph.microsoft.com/v1.0/users/${MSO_EMAIL_FROM}/sendMail" \
+            -H "Authorization: Bearer ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d @/tmp/graph-mail.json)
+          if [ "$HTTP_CODE" -lt 200 ] || [ "$HTTP_CODE" -ge 300 ]; then
+            echo "::error::Office 365 sendMail failed (HTTP $HTTP_CODE): $(cat /tmp/graph-response.txt)"
+            exit 1
+          fi
+          echo "Office 365 send mail completed successfully."
