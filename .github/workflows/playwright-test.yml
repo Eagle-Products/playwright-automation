@@ -364,18 +364,18 @@ jobs:
             echo "from=${{ secrets.SMTP_FROM }}" >> $GITHUB_OUTPUT
           fi
 
-      - name: Send test results email (Gmail)
-        if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure') && (steps.sender-name.outputs.use_office_mail != 'true')
-        uses: dawidd6/action-send-mail@v3
-        with:
-          server_address: ${{ secrets.SMTP_SERVER }}
-          server_port: ${{ secrets.SMTP_PORT }}
-          username: ${{ secrets.SMTP_USERNAME }}
-          password: ${{ secrets.SMTP_PASSWORD }}
-          subject: ${{ steps.email-body.outputs.subject }}
-          to: ${{ secrets.EMAIL_TO }}
-          from: ${{ steps.sender-name.outputs.from }}
-          html_body: ${{ steps.email-body.outputs.html_body }}
+      # - name: Send test results email (Gmail)
+      #   if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure') && (steps.sender-name.outputs.use_office_mail != 'true')
+      #   uses: dawidd6/action-send-mail@v3
+      #   with:
+      #     server_address: ${{ secrets.SMTP_SERVER }}
+      #     server_port: ${{ secrets.SMTP_PORT }}
+      #     username: ${{ secrets.SMTP_USERNAME }}
+      #     password: ${{ secrets.SMTP_PASSWORD }}
+      #     subject: ${{ steps.email-body.outputs.subject }}
+      #     to: ${{ secrets.EMAIL_TO }}
+      #     from: ${{ steps.sender-name.outputs.from }}
+      #     html_body: ${{ steps.email-body.outputs.html_body }}
 
       - name: Send test results email (Office 365)
         if: always() && (steps.test-run.outcome == 'success' || steps.test-run.outcome == 'failure')
